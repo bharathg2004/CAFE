@@ -1,11 +1,40 @@
 import React, { useState, useEffect } from 'react';
-import { ChefHat, AlertOctagon, CheckCircle2, Clock, Utensils, MessageSquare } from 'lucide-react';
+import { ChefHat, AlertOctagon, CheckCircle2, Clock, Utensils, MessageSquare, Maximize, Minimize, Volume2, Printer } from 'lucide-react';
 import { cafeStore } from '../lib/sync';
 import { Order, OrderItem } from '../types/cafe';
+import { sound } from '../lib/audio';
+import { ThermalReceiptModal } from './ThermalReceiptModal';
 
 export const ChefPortal: React.FC = () => {
   const [kitchenOrders, setKitchenOrders] = useState<Order[]>([]);
   const [currentTime, setCurrentTime] = useState<number>(Date.now());
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const [isWakeLocked, setIsWakeLocked] = useState<boolean>(false);
+  const [printKotOrder, setPrintKotOrder] = useState<Order | null>(null);
+
+  useEffect(() => {
+    // Screen Wake Lock API to prevent kitchen TV from turning off / sleeping
+    let wl: any = null;
+    if (typeof navigator !== 'undefined' && 'wakeLock' in navigator) {
+      navigator.wakeLock.request('screen')
+        .then((lock) => {
+          wl = lock;
+          setIsWakeLocked(true);
+        })
+        .catch(() => {});
+    }
+    return () => {
+      if (wl) wl.release().catch(() => {});
+    };
+  }, []);
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => {});
+    } else {
+      document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => {});
+    }
+  };
 
   useEffect(() => {
     const update = () => {
@@ -89,17 +118,36 @@ export const ChefPortal: React.FC = () => {
               KITCHEN DISPLAY SYSTEM (KDS)
             </h1>
             <p className="text-xs text-stone-400">
-              Active Cooking Orders: <span className="font-bold text-amber-400">{kitchenOrders.length}</span> | 
-              Optimized for Optical Mouse Click
+              Active Orders: <span className="font-bold text-amber-400">{kitchenOrders.length}</span>
+              {' | '}Screen Awake: <span className={isWakeLocked ? 'text-emerald-400 font-bold' : 'text-stone-500'}>
+                {isWakeLocked ? '● ON' : '○ OFF'}
+              </span>
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Sound Test Button */}
+          <button
+            onClick={() => sound.playKitchenChime()}
+            title="Test Kitchen Chime Volume"
+            className="p-3 bg-stone-800 hover:bg-stone-700 text-stone-300 rounded-2xl border border-stone-700 transition cursor-pointer"
+          >
+            <Volume2 className="w-5 h-5 text-amber-400" />
+          </button>
+
+          {/* Fullscreen Kiosk Mode Toggle */}
+          <button
+            onClick={toggleFullscreen}
+            title="Toggle TV Fullscreen Kiosk Mode"
+            className="p-3 bg-stone-800 hover:bg-stone-700 text-stone-300 rounded-2xl border border-stone-700 transition cursor-pointer"
+          >
+            {isFullscreen ? <Minimize className="w-5 h-5 text-emerald-400" /> : <Maximize className="w-5 h-5" />}
+          </button>
+
           {/* Chef Emergency Need Help Button */}
           <button
             onClick={() => {
-              // Trigger help on first active order or global
               if (kitchenOrders.length > 0) {
                 const target = kitchenOrders[0];
                 cafeStore.triggerChefHelp(target.id, !target.chefHelpRequested);
@@ -107,10 +155,10 @@ export const ChefPortal: React.FC = () => {
                 alert('No active kitchen orders to link emergency signal to.');
               }
             }}
-            className="px-6 py-3.5 bg-red-600 hover:bg-red-500 active:scale-95 text-white font-extrabold text-sm sm:text-base rounded-2xl shadow-xl border-2 border-red-400 flex items-center gap-2 transition cursor-pointer"
+            className="px-5 py-3 bg-red-600 hover:bg-red-500 active:scale-95 text-white font-extrabold text-xs sm:text-sm rounded-2xl shadow-xl border-2 border-red-400 flex items-center gap-2 transition cursor-pointer"
           >
             <AlertOctagon className="w-5 h-5 animate-pulse" />
-            <span>NEED HELP (ALERT BILLER)</span>
+            <span>NEED HELP</span>
           </button>
         </div>
       </div>
@@ -206,11 +254,19 @@ export const ChefPortal: React.FC = () => {
                   })}
                 </div>
 
-                {/* Footer Action Button: Giant Clickable Hit-Target for Mouse */}
-                <div className="p-4 bg-stone-950 border-t border-stone-800/80">
+                {/* Footer Action Buttons */}
+                <div className="p-4 bg-stone-950 border-t border-stone-800/80 flex items-center gap-2">
+                  <button
+                    onClick={() => setPrintKotOrder(order)}
+                    title="Print Kitchen Order Ticket (KOT)"
+                    className="p-4 bg-stone-800 hover:bg-stone-700 text-stone-300 rounded-2xl border border-stone-700 transition cursor-pointer"
+                  >
+                    <Printer className="w-6 h-6 text-amber-400" />
+                  </button>
+
                   <button
                     onClick={() => cafeStore.markOrderServed(order.id)}
-                    className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black text-base rounded-2xl shadow-xl flex items-center justify-center gap-2 transition cursor-pointer border-2 border-emerald-400"
+                    className="flex-1 py-4 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black text-sm sm:text-base rounded-2xl shadow-xl flex items-center justify-center gap-2 transition cursor-pointer border-2 border-emerald-400"
                   >
                     <CheckCircle2 className="w-6 h-6" />
                     <span>MARK SENT TO TABLE</span>
@@ -220,6 +276,14 @@ export const ChefPortal: React.FC = () => {
             );
           })}
         </div>
+      )}
+
+      {/* Thermal KOT Modal */}
+      {printKotOrder && (
+        <ThermalReceiptModal
+          order={printKotOrder}
+          onClose={() => setPrintKotOrder(null)}
+        />
       )}
     </div>
   );

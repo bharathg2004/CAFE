@@ -6,10 +6,14 @@ import {
   PackagePlus, 
   X, 
   Check, 
-  Bell
+  Bell,
+  QrCode,
+  Printer
 } from 'lucide-react';
 import { cafeStore } from '../lib/sync';
 import { Order, MenuItem, TableSession } from '../types/cafe';
+import { TableQRPrintModal } from './TableQRPrintModal';
+import { ThermalReceiptModal } from './ThermalReceiptModal';
 
 export const BillerPortal: React.FC = () => {
   const [tables, setTables] = useState<TableSession[]>([]);
@@ -21,6 +25,8 @@ export const BillerPortal: React.FC = () => {
   const [showCashCalcModal, setShowCashCalcModal] = useState<Order | null>(null);
   const [cashTendered, setCashTendered] = useState<string>('');
   const [showStockInwardModal, setShowStockInwardModal] = useState<boolean>(false);
+  const [showQRPrintModal, setShowQRPrintModal] = useState<boolean>(false);
+  const [receiptOrder, setReceiptOrder] = useState<{ order: Order; cashTendered?: number } | null>(null);
   const [selectedTableForOrder, setSelectedTableForOrder] = useState<number>(1);
 
   // Walk-in order state
@@ -195,6 +201,15 @@ export const BillerPortal: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Print Table QRs */}
+          <button
+            onClick={() => setShowQRPrintModal(true)}
+            className="px-3.5 py-2.5 bg-stone-800 hover:bg-stone-700 text-stone-200 font-bold text-xs sm:text-sm rounded-xl border border-stone-700 flex items-center gap-2 transition cursor-pointer"
+          >
+            <QrCode className="w-4 h-4 text-amber-400" />
+            <span className="hidden sm:inline">Print Table QRs</span>
+          </button>
+
           {/* Create Walk-in Order Button */}
           <button
             onClick={() => setShowWalkinModal(true)}
@@ -210,7 +225,7 @@ export const BillerPortal: React.FC = () => {
             className="px-4 py-2.5 bg-stone-800 hover:bg-stone-700 text-stone-200 font-bold text-xs sm:text-sm rounded-xl border border-stone-700 flex items-center gap-2 transition cursor-pointer"
           >
             <PackagePlus className="w-4 h-4 text-emerald-400" />
-            <span>Inward Stock (Distributor)</span>
+            <span className="hidden sm:inline">Inward Stock</span>
           </button>
         </div>
       </div>
@@ -485,13 +500,28 @@ export const BillerPortal: React.FC = () => {
             <div className="flex gap-2 pt-2">
               <button
                 onClick={() => {
+                  const ord = showCashCalcModal;
+                  const tendered = parseFloat(cashTendered) || ord.totalAmount;
+                  cafeStore.confirmCounterPayment(ord.id);
+                  setShowCashCalcModal(null);
+                  setReceiptOrder({ order: ord, cashTendered: tendered });
+                }}
+                className="px-4 py-3.5 bg-stone-800 hover:bg-stone-700 text-amber-400 font-bold text-xs rounded-2xl border border-stone-700 flex items-center justify-center gap-1.5 transition"
+                title="Mark paid and open thermal receipt print"
+              >
+                <Printer className="w-4 h-4" />
+                <span>Paid & Print Bill</span>
+              </button>
+
+              <button
+                onClick={() => {
                   cafeStore.confirmCounterPayment(showCashCalcModal.id);
                   setShowCashCalcModal(null);
                 }}
-                className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm rounded-2xl shadow-xl flex items-center justify-center gap-2 transition"
+                className="flex-1 py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm rounded-2xl shadow-xl flex items-center justify-center gap-2 transition"
               >
                 <Check className="w-5 h-5" />
-                <span>Mark Paid & Send to Kitchen</span>
+                <span>Mark Paid & Send</span>
               </button>
             </div>
           </div>
@@ -711,11 +741,23 @@ export const BillerPortal: React.FC = () => {
                 onClick={handlePlaceWalkin}
                 className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-black rounded-xl shadow"
               >
-                Place Order & Calculate Cash
+                Place Order &amp; Calculate Cash
               </button>
             </div>
           </div>
         </div>
+      )}
+
+      {/* Table QR Standees Print Modal */}
+      {showQRPrintModal && <TableQRPrintModal onClose={() => setShowQRPrintModal(false)} />}
+
+      {/* Thermal Receipt Print Modal */}
+      {receiptOrder && (
+        <ThermalReceiptModal
+          order={receiptOrder.order}
+          cashTendered={receiptOrder.cashTendered}
+          onClose={() => setReceiptOrder(null)}
+        />
       )}
     </div>
   );

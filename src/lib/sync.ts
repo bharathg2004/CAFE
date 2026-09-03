@@ -1,6 +1,20 @@
-import { Order, MenuItem, TableSession, StockInwardLog, CustomerProfile, Coupon, OrderItem, PaymentMode } from '../types/cafe';
+import { Order, MenuItem, TableSession, StockInwardLog, CustomerProfile, Coupon, OrderItem, PaymentMode, CafeSettings } from '../types/cafe';
 import { INITIAL_MENU_ITEMS, INITIAL_TABLES, INITIAL_COUPONS } from './mockData';
 import { sound } from './audio';
+
+export const DEFAULT_SETTINGS: CafeSettings = {
+  cafeName: 'CafeOS Artisan Bistro',
+  tagline: 'Fresh Brews & Gourmet Bites',
+  upiVpa: 'bharathcafe@upi',
+  merchantName: 'CafeOS',
+  address: 'Main Street, Cafe Lane, Ground Floor',
+  phone: '9876543210',
+  gstin: '29ABCDE1234F1Z5',
+  tableCount: 12,
+  qrBaseUrl: typeof window !== 'undefined' 
+    ? (window.location.origin + window.location.pathname).replace(/\/$/, '')
+    : 'https://bharathg2004.github.io/CAFE'
+};
 
 type Listener = () => void;
 
@@ -11,6 +25,7 @@ class CafeStore {
   private stockLogs: StockInwardLog[] = [];
   private customers: Map<string, CustomerProfile> = new Map();
   private coupons: Coupon[] = [];
+  private settings: CafeSettings = DEFAULT_SETTINGS;
   private listeners: Set<Listener> = new Set();
   private channel: BroadcastChannel | null = null;
 
@@ -26,12 +41,14 @@ class CafeStore {
     const savedStockLogs = localStorage.getItem('cafeos_stock_logs');
     const savedCustomers = localStorage.getItem('cafeos_customers');
     const savedCoupons = localStorage.getItem('cafeos_coupons');
+    const savedSettings = localStorage.getItem('cafeos_settings');
 
     this.menu = savedMenu ? JSON.parse(savedMenu) : INITIAL_MENU_ITEMS;
     this.tables = savedTables ? JSON.parse(savedTables) : INITIAL_TABLES;
     this.orders = savedOrders ? JSON.parse(savedOrders) : this.getSeedOrders();
     this.stockLogs = savedStockLogs ? JSON.parse(savedStockLogs) : this.getSeedStockLogs();
     this.coupons = savedCoupons ? JSON.parse(savedCoupons) : INITIAL_COUPONS;
+    this.settings = savedSettings ? JSON.parse(savedSettings) : DEFAULT_SETTINGS;
 
     if (savedCustomers) {
       const parsed = JSON.parse(savedCustomers);
@@ -178,6 +195,7 @@ class CafeStore {
     localStorage.setItem('cafeos_tables', JSON.stringify(this.tables));
     localStorage.setItem('cafeos_stock_logs', JSON.stringify(this.stockLogs));
     localStorage.setItem('cafeos_coupons', JSON.stringify(this.coupons));
+    localStorage.setItem('cafeos_settings', JSON.stringify(this.settings));
 
     const custObj: Record<string, CustomerProfile> = {};
     this.customers.forEach((v, k) => { custObj[k] = v; });
@@ -196,12 +214,14 @@ class CafeStore {
     const savedStockLogs = localStorage.getItem('cafeos_stock_logs');
     const savedCustomers = localStorage.getItem('cafeos_customers');
     const savedCoupons = localStorage.getItem('cafeos_coupons');
+    const savedSettings = localStorage.getItem('cafeos_settings');
 
     if (savedOrders) this.orders = JSON.parse(savedOrders);
     if (savedMenu) this.menu = JSON.parse(savedMenu);
     if (savedTables) this.tables = JSON.parse(savedTables);
     if (savedStockLogs) this.stockLogs = JSON.parse(savedStockLogs);
     if (savedCoupons) this.coupons = JSON.parse(savedCoupons);
+    if (savedSettings) this.settings = JSON.parse(savedSettings);
 
     if (savedCustomers) {
       this.customers.clear();
@@ -277,6 +297,15 @@ class CafeStore {
     return [...this.coupons];
   }
 
+  public getSettings(): CafeSettings {
+    return { ...this.settings };
+  }
+
+  public updateSettings(partial: Partial<CafeSettings>) {
+    this.settings = { ...this.settings, ...partial };
+    this.persist();
+  }
+
   public getActiveOrderByTable(tableNumber: number): Order | undefined {
     return this.orders.find(
       (o) => o.tableNumber === tableNumber && o.orderStatus !== 'COMPLETED' && o.orderStatus !== 'CANCELLED'
@@ -320,6 +349,7 @@ class CafeStore {
       cookingInstruction?: string;
     }[];
     paymentMode: PaymentMode;
+    upiTransactionId?: string;
   }): Order {
     const now = Date.now();
     const orderItems: OrderItem[] = params.items.map((it, idx) => {
@@ -355,7 +385,8 @@ class CafeStore {
       paymentStatus: isPaid ? 'PAID' : 'PENDING',
       orderStatus: isPaid ? 'PREPARING' : 'PENDING',
       createdAt: now,
-      paidAt: isPaid ? now : undefined
+      paidAt: isPaid ? now : undefined,
+      upiTransactionId: params.upiTransactionId
     };
 
     this.orders.unshift(newOrder);

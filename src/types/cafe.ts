@@ -55,6 +55,23 @@ export interface Order {
   servedAt?: number;
   completedAt?: number;
   chefHelpRequested?: boolean;
+  upiTransactionId?: string;
+}
+
+export interface CafeSettings {
+  cafeName: string;
+  tagline: string;
+  upiVpa: string;
+  merchantName: string;
+  address: string;
+  phone: string;
+  gstin?: string;
+  tableCount: number;
+  qrBaseUrl: string;
+  // Extended optional fields used in Owner Settings UI
+  cafePhone?: string;
+  cafeAddress?: string;
+  showGst?: boolean;
 }
 
 export interface TableSession {

@@ -8,10 +8,14 @@ import {
   AlertTriangle,
   Lock,
   LogOut,
-  Calendar
+  Calendar,
+  Settings,
+  QrCode,
+  Printer
 } from 'lucide-react';
 import { cafeStore } from '../lib/sync';
-import { Order, MenuItem, StockInwardLog, CustomerProfile, Coupon } from '../types/cafe';
+import { Order, MenuItem, StockInwardLog, CustomerProfile, Coupon, CafeSettings } from '../types/cafe';
+import { TableQRPrintModal } from './TableQRPrintModal';
 
 export const OwnerPortal: React.FC = () => {
   // Authentication State
@@ -27,8 +31,12 @@ export const OwnerPortal: React.FC = () => {
   const [customers, setCustomers] = useState<CustomerProfile[]>([]);
   const [coupons, setCoupons] = useState<Coupon[]>([]);
 
+  // Settings State
+  const [settingsForm, setSettingsForm] = useState<CafeSettings>(cafeStore.getSettings());
+  const [showQRModal, setShowQRModal] = useState<boolean>(false);
+
   // Active Tab in Owner Panel
-  const [ownerSection, setOwnerSection] = useState<'analytics' | 'inventory' | 'menu' | 'crm' | 'coupons'>('analytics');
+  const [ownerSection, setOwnerSection] = useState<'analytics' | 'inventory' | 'menu' | 'crm' | 'coupons' | 'settings'>('analytics');
 
   // Time Range Filter for 1-Minute Financial Health Check
   const [timeFilter, setTimeFilter] = useState<'today' | 'week' | 'month' | 'year' | 'all'>('today');
@@ -317,6 +325,18 @@ export const OwnerPortal: React.FC = () => {
           }`}
         >
           Menu & Recipe Editor
+        </button>
+
+        <button
+          onClick={() => setOwnerSection('settings')}
+          className={`px-4 py-2 rounded-xl transition flex items-center gap-1.5 whitespace-nowrap ${
+            ownerSection === 'settings'
+              ? 'bg-amber-500 text-stone-950 font-bold'
+              : 'bg-stone-900 text-stone-400 hover:text-white'
+          }`}
+        >
+          <Settings className="w-3.5 h-3.5" />
+          Cafe Settings
         </button>
       </div>
 
@@ -614,6 +634,116 @@ export const OwnerPortal: React.FC = () => {
           </div>
         </div>
       )}
+      {/* SECTION 6: CAFE & UPI SETTINGS */}
+      {ownerSection === 'settings' && (
+        <div className="space-y-6 max-w-lg">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-bold text-sm text-white">Cafe & UPI Settings</h3>
+              <p className="text-xs text-stone-400 mt-0.5">Configure your cafe identity, UPI payment VPA, and table count.</p>
+            </div>
+            <button
+              onClick={() => setShowQRModal(true)}
+              className="px-4 py-2.5 bg-stone-800 hover:bg-stone-700 text-amber-400 font-bold text-xs rounded-xl border border-stone-700 flex items-center gap-2 transition"
+            >
+              <QrCode className="w-4 h-4" />
+              Print Table QR Standees
+            </button>
+          </div>
+
+          <div className="bg-stone-900 border border-stone-800 rounded-2xl p-5 space-y-4">
+            {/* Cafe Name */}
+            <div>
+              <label className="text-xs text-stone-400 block mb-1 font-bold">Cafe Name</label>
+              <input
+                type="text"
+                value={settingsForm.merchantName}
+                onChange={(e) => setSettingsForm({ ...settingsForm, merchantName: e.target.value })}
+                className="w-full bg-stone-950 border border-stone-700 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500"
+                placeholder="e.g. The Cozy Bean"
+              />
+            </div>
+
+            {/* UPI VPA */}
+            <div>
+              <label className="text-xs text-stone-400 block mb-1 font-bold">UPI VPA (Payment Address)</label>
+              <input
+                type="text"
+                value={settingsForm.upiVpa}
+                onChange={(e) => setSettingsForm({ ...settingsForm, upiVpa: e.target.value })}
+                className="w-full bg-stone-950 border border-amber-500/40 rounded-xl px-3 py-2.5 text-sm text-amber-300 font-mono focus:outline-none focus:border-amber-500"
+                placeholder="e.g. mycafe@okhdfcbank"
+              />
+              <p className="text-[10px] text-stone-500 mt-1">Get this from your GPay / PhonePe / Bank app. Customers scan and pay directly to this VPA.</p>
+            </div>
+
+            {/* Cafe Phone */}
+            <div>
+              <label className="text-xs text-stone-400 block mb-1 font-bold">Cafe Phone Number (for receipts)</label>
+              <input
+                type="text"
+                value={settingsForm.cafePhone || ''}
+                onChange={(e) => setSettingsForm({ ...settingsForm, cafePhone: e.target.value })}
+                className="w-full bg-stone-950 border border-stone-700 rounded-xl px-3 py-2.5 text-sm text-white font-mono focus:outline-none focus:border-amber-500"
+                placeholder="e.g. 9876543210"
+              />
+            </div>
+
+            {/* Cafe Address */}
+            <div>
+              <label className="text-xs text-stone-400 block mb-1 font-bold">Cafe Address (for receipts & QR standees)</label>
+              <textarea
+                value={settingsForm.cafeAddress || ''}
+                onChange={(e) => setSettingsForm({ ...settingsForm, cafeAddress: e.target.value })}
+                rows={2}
+                className="w-full bg-stone-950 border border-stone-700 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500 resize-none"
+                placeholder="e.g. 12, MG Road, Bengaluru - 560001"
+              />
+            </div>
+
+            {/* Table Count */}
+            <div>
+              <label className="text-xs text-stone-400 block mb-1 font-bold">Number of Tables</label>
+              <input
+                type="number"
+                min={1}
+                max={50}
+                value={settingsForm.tableCount}
+                onChange={(e) => setSettingsForm({ ...settingsForm, tableCount: parseInt(e.target.value) || 12 })}
+                className="w-full bg-stone-950 border border-stone-700 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500"
+              />
+            </div>
+
+            {/* GST Toggle */}
+            <div className="flex items-center justify-between p-3.5 bg-stone-950 rounded-xl border border-stone-800">
+              <div>
+                <span className="text-xs font-bold text-white block">GST on Receipts</span>
+                <span className="text-[10px] text-stone-500">Print GSTIN and 5% GST breakup on customer bill</span>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={settingsForm.showGst ?? false}
+                  onChange={(e) => setSettingsForm({ ...settingsForm, showGst: e.target.checked })}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-stone-700 peer-focus:ring-2 peer-focus:ring-amber-500 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+              </label>
+            </div>
+
+            <button
+              onClick={() => {
+                cafeStore.updateSettings(settingsForm);
+                alert('✅ Settings saved! Changes will reflect immediately across all portals.');
+              }}
+              className="w-full py-3.5 bg-amber-500 hover:bg-amber-400 text-stone-950 font-black text-sm rounded-2xl shadow-xl flex items-center justify-center gap-2 transition"
+            >
+              <Printer className="w-4 h-4" />
+              Save Settings
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Target Customer Marketing Modal (SMS / WhatsApp generator) */}
       {targetCustomer && (
@@ -826,6 +956,8 @@ export const OwnerPortal: React.FC = () => {
           </div>
         </div>
       )}
+      {/* Table QR Print Modal */}
+      {showQRModal && <TableQRPrintModal onClose={() => setShowQRModal(false)} />}
     </div>
   );
 };

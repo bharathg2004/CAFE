@@ -9,8 +9,10 @@ import {
   QrCode, 
   CheckCircle2, 
   ChevronRight,
-  Clock
+  Clock,
+  ExternalLink
 } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { cafeStore } from '../lib/sync';
 import { MenuItem, Order } from '../types/cafe';
 import { sound } from '../lib/audio';
@@ -20,6 +22,7 @@ interface Props {
 }
 
 export const CustomerPortal: React.FC<Props> = ({ tableNumber }) => {
+  const settings = cafeStore.getSettings();
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [cart, setCart] = useState<{ [menuItemId: string]: number }>({});
   const [instructions, setInstructions] = useState<{ [menuItemId: string]: string }>({});
@@ -34,6 +37,8 @@ export const CustomerPortal: React.FC<Props> = ({ tableNumber }) => {
   
   // Payment Modal State
   const [showPaymentModal, setShowPaymentModal] = useState<boolean>(false);
+  const [showUpiModal, setShowUpiModal] = useState<boolean>(false);
+  const [upiUtr, setUpiUtr] = useState<string>('');
   const [paymentChoice, setPaymentChoice] = useState<'UPI' | 'COUNTER'>('UPI');
   const [isProcessingPayment, setIsProcessingPayment] = useState<boolean>(false);
   const [orderConfirmed, setOrderConfirmed] = useState<Order | null>(null);
@@ -168,16 +173,19 @@ export const CustomerPortal: React.FC<Props> = ({ tableNumber }) => {
         customerName,
         customerPhone,
         items: itemsToOrder,
-        paymentMode: mode
+        paymentMode: mode,
+        upiTransactionId: mode === 'UPI' ? upiUtr.trim() || undefined : undefined
       });
 
       setOrderConfirmed(newOrder);
       setCart({});
       setInstructions({});
+      setUpiUtr('');
       setIsProcessingPayment(false);
       setShowPaymentModal(false);
+      setShowUpiModal(false);
       setIsCartOpen(false);
-    }, 1200);
+    }, 1000);
   };
 
   return (
@@ -610,17 +618,107 @@ export const CustomerPortal: React.FC<Props> = ({ tableNumber }) => {
             </div>
 
             <button
-              onClick={() => handleExecutePayment(paymentChoice)}
+              onClick={() => {
+                if (paymentChoice === 'UPI') {
+                  setShowPaymentModal(false);
+                  setShowUpiModal(true);
+                } else {
+                  handleExecutePayment('COUNTER');
+                }
+              }}
               disabled={isProcessingPayment}
               className="w-full py-3.5 bg-amber-500 hover:bg-amber-400 text-stone-950 font-extrabold rounded-2xl text-xs flex items-center justify-center gap-2 transition"
             >
               {isProcessingPayment ? (
                 <span>Confirming Transaction...</span>
               ) : paymentChoice === 'UPI' ? (
-                <span>Pay ₹{totalCartAmount} via UPI</span>
+                <span>Proceed to UPI Payment (₹{totalCartAmount})</span>
               ) : (
                 <span>Submit Order & Pay at Desk</span>
               )}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Dynamic UPI Payment Modal (Real-world NPCI standard with GPay / PhonePe / Paytm) */}
+      {showUpiModal && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-stone-900 border border-amber-500/50 rounded-3xl p-6 max-w-sm w-full space-y-4 shadow-2xl animate-in zoom-in-95">
+            <div className="flex items-center justify-between pb-2 border-b border-stone-800">
+              <div className="flex items-center gap-2">
+                <QrCode className="w-5 h-5 text-amber-500" />
+                <h3 className="font-bold text-sm text-white">Scan & Pay via UPI</h3>
+              </div>
+              <button
+                onClick={() => setShowUpiModal(false)}
+                className="text-stone-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Dynamic QR Box */}
+            <div className="bg-white p-4 rounded-2xl flex flex-col items-center justify-center shadow-inner">
+              <QRCodeSVG
+                value={`upi://pay?pa=${settings.upiVpa}&pn=${encodeURIComponent(
+                  settings.merchantName
+                )}&am=${totalCartAmount}&cu=INR&tn=${encodeURIComponent(
+                  `Table_${tableNumber}_CafeOS`
+                )}`}
+                size={180}
+                level="H"
+                includeMargin={false}
+              />
+              <span className="text-stone-900 font-black text-xs mt-2 font-mono">
+                {settings.upiVpa}
+              </span>
+              <span className="text-[10px] text-stone-500 font-medium">
+                Merchant: {settings.merchantName}
+              </span>
+            </div>
+
+            <div className="bg-stone-950 p-3 rounded-xl border border-stone-800 text-center">
+              <span className="text-xs text-stone-400 block">Total Amount to Pay:</span>
+              <span className="text-2xl font-black text-amber-400 font-mono">
+                ₹{totalCartAmount}
+              </span>
+            </div>
+
+            {/* Native UPI Intent Button (Opens Google Pay / PhonePe directly on phone) */}
+            <a
+              href={`upi://pay?pa=${settings.upiVpa}&pn=${encodeURIComponent(
+                settings.merchantName
+              )}&am=${totalCartAmount}&cu=INR&tn=${encodeURIComponent(
+                `Table_${tableNumber}_CafeOS`
+              )}`}
+              className="w-full py-3 bg-stone-800 hover:bg-stone-700 border border-stone-600 text-stone-200 font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition"
+            >
+              <ExternalLink className="w-4 h-4 text-amber-400" />
+              <span>Tap to Open UPI App (GPay / PhonePe)</span>
+            </a>
+
+            {/* Reference / UTR input */}
+            <div>
+              <label className="text-[11px] text-stone-400 block mb-1">
+                UPI Reference / UTR (Optional)
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. 423456789012"
+                value={upiUtr}
+                onChange={(e) => setUpiUtr(e.target.value)}
+                className="w-full bg-stone-950 border border-stone-700 rounded-xl px-3 py-2 text-xs text-white font-mono placeholder-stone-600 focus:outline-none focus:border-amber-500"
+              />
+            </div>
+
+            <button
+              onClick={() => handleExecutePayment('UPI')}
+              disabled={isProcessingPayment}
+              className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-2xl shadow-xl flex items-center justify-center gap-2 transition"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span>I Have Completed Payment (₹{totalCartAmount})</span>
             </button>
           </div>
         </div>
